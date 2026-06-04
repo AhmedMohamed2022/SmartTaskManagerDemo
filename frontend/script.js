@@ -60,7 +60,6 @@ async function registerUser() {
 */
 async function loginUser() {
   try {
-    console.log("Login button clicked");
     const email = document.getElementById("loginEmail").value;
 
     const password = document.getElementById("loginPassword").value;
@@ -81,8 +80,6 @@ async function loginUser() {
     });
 
     const data = await response.json();
-    console.log("Status:", response.status);
-    console.log("Response:", data);
 
     if (!response.ok) {
       return showMessage(data.message, false);

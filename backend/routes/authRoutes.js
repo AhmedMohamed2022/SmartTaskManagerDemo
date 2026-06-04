@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const User = require("../models/User");
-
+const validator = require("validator");
 const { validateRegister, validateLogin } = require("../middleware/validate");
 
 const { encrypt } = require("../utils/encryption");
@@ -21,7 +21,18 @@ router.post("/register", validateRegister, async (req, res) => {
   try {
     const { username, email, password, securityNote } = req.body;
 
-    const existingUser = await User.findOne({ email });
+    const normalizedEmail = validator.normalizeEmail(email?.trim());
+
+    if (!normalizedEmail || !validator.isEmail(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email",
+      });
+    }
+
+    const existingUser = await User.findOne({
+      email: normalizedEmail,
+    });
 
     if (existingUser) {
       return res.status(400).json({
@@ -36,7 +47,7 @@ router.post("/register", validateRegister, async (req, res) => {
 
     const user = await User.create({
       username,
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
       securityNote: encryptedNote,
     });
@@ -66,7 +77,18 @@ router.post("/login", validateLogin, async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
+    const normalizedEmail = validator.normalizeEmail(email?.trim());
+
+    if (!normalizedEmail || !validator.isEmail(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email",
+      });
+    }
+
+    const user = await User.findOne({
+      email: normalizedEmail,
+    });
 
     if (!user) {
       return res.status(401).json({
@@ -94,18 +116,30 @@ router.post("/login", validateLogin, async (req, res) => {
         expiresIn: "1h",
       },
     );
+    /*
+|--------------------------------------------------------------------------
+| CSRF Mitigation
+|--------------------------------------------------------------------------
+|
+| Authentication cookies use:
+| - HttpOnly
+| - SameSite=Strict
+| - Secure flag in production
+|
+| Production deployment should additionally
+| use dedicated CSRF middleware such as csurf.
+|
+*/
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
       maxAge: 60 * 60 * 1000,
     };
 
     res.cookie(process.env.COOKIE_NAME, token, cookieOptions);
-    console.log("Cookie sent");
 
     logAction(`User login: ${user.email}`);
-    console.log(res.getHeaders());
     return res.json({
       success: true,
       role: user.role,
